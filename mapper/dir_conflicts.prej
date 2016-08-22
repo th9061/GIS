@@ -1,0 +1,21 @@
+Trying to change property 'svn:ignore' from 'libstreetmap.a
+mapper
+libstreetsdatabase.a
+build
+' to 'libstreetmap.a
+mapper
+libstreetsdatabase.a
+build
+.nfs00000000002ba6df0000089e
+.nfs00000000002bab570000089f
+',
+but the property has been locally changed from 'libstreetmap.a
+mapper
+libstreetsdatabase.a
+build
+' to 'libstreetmap.a
+mapper
+libstreetsdatabase.a
+build
+.nfs000000000053f651000003eb
+'.

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project-private xmlns="http://www.netbeans.org/ns/project-private/1">
+    <data xmlns="http://www.netbeans.org/ns/make-project-private/1">
+        <activeConfTypeElem>0</activeConfTypeElem>
+        <activeConfIndexElem>1</activeConfIndexElem>
+    </data>
+    <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="7">
+        <file>
+            <url>libstreetmap/src/m2.cpp</url>
+            <bookmark id="4">
+                <name/>
+                <line>544</line>
+                <key/>
+            </bookmark>
+            <bookmark id="7">
+                <name/>
+                <line>707</line>
+                <key/>
+            </bookmark>
+            <bookmark id="6">
+                <name/>
+                <line>820</line>
+                <key/>
+            </bookmark>
+            <bookmark id="5">
+                <name/>
+                <line>5067</line>
+                <key/>
+            </bookmark>
+        </file>
+    </editor-bookmarks>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+        <group>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m3.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/load_pathdata.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m2.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetsdatabase/src/StreetSegmentEnds.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m4.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m4.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/userInput.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/graphics.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetsdatabase/src/StreetsDatabaseAPI.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m3.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/graphics.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/load_pathdata.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetsdatabase/src/LatLon.h</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m1.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/main/src/main.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/layer.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m2.cpp</file>
+            <file>file:/nfs/ug/homes-4/e/enriqu10/mapper_repo/mapper/libstreetmap/src/m1.h</file>
+        </group>
+    </open-files>
+</project-private>

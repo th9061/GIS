@@ -1,0 +1,273 @@
+#!/usr/bin/python
+
+import os
+import os.path as path
+import sys
+
+#Argument parsing
+import argparse
+import textwrap
+
+#Creating temporary files
+import tempfile
+
+#High-level file operations (e.g. rm -r)
+import shutil
+
+import subprocess
+
+#File name matching
+import fnmatch
+
+#Config file parsing
+import ConfigParser
+
+#ece297 specific
+from ece297util import ConfigError, BuildError, TimeOutError, ActionFailedError, find_config_file
+from ece297config import MilestoneConfig
+import ece297unittest
+import ece297exectest
+import ece297valgrindexectest
+import ece297base
+
+MIN_MILESTONE_NUMBER = 0
+MAX_MILESTONE_NUMBER = 4
+CONFIG_DIR="/cad2/ece297s/public/"
+
+CONFIG_ERROR_RETURN_CODE = 1
+BUILD_ERROR_RETURN_CODE = 1
+TIMEOUT_ERROR_RETURN_CODE = 1
+KEYBOARD_INTERRUPT_RETURN_CODE = 1
+LIST_RETURN_CODE = 1
+
+INDENT='  '
+
+def main():
+    #Parse args, set defaults
+    args = parse_args()
+
+    return_code = 1 #Default assume failed
+    try:
+
+        #Also creates test directory
+        args = set_default_args(args)
+
+        milestone_config = MilestoneConfig(find_config_file(args.config_dir, args.milestone_number))
+
+        if args.list_testers:
+            print "Supported Milestone %d Testers:" % (args.milestone_number)
+            for tester in milestone_config.testers():
+                print "\t", tester.name()
+            return_code = LIST_RETURN_CODE
+        else:
+            #Confirm setup
+            verify_setup(args, milestone_config)
+
+            #Move files to temp dir
+            stage_temp_dir(args, milestone_config)
+
+            os.chdir(args.temp_dir_path)
+
+            testers_to_run = select_testers_to_run(args, milestone_config)
+
+            print "The following %d tester(s) will be run:" % (len(testers_to_run))
+            for tester in testers_to_run:
+                print "\t", tester.name()
+            print
+
+            results = []
+            for tester in testers_to_run:
+                print "Running Tester: {name}".format(name=tester.name())
+
+                try:
+                    result = tester.test(indent=INDENT)
+                except TimeOutError as e:
+                    if e.output:
+                        #Give partial output if students hit global timeout limit
+                        # This will hopefully allow them to see where they are going wrong
+                        for line in e.output:
+                            print "    " + line
+                    print "Timeout Error on " + tester.name() + ": ", e
+                    result = ece297base.TesterResult(tester.name(), timed_out=True)
+
+                results.append(result)
+                print ""
+
+            print ""
+            num_failed = print_summary(results)
+
+            #Use return code to indicate number of failures
+            return_code = num_failed
+
+    except ConfigError as e:
+        print "Configuration Error: ", e
+        return CONFIG_ERROR_RETURN_CODE
+    except BuildError as e:
+        print "Build Error: ", e
+        return BUILD_ERROR_RETURN_CODE
+    except ActionFailedError as e:
+        print "Action Failed Error: ", e
+        return BUILD_ERROR_RETURN_CODE
+    except KeyboardInterrupt as e:
+        print "Recieved keyboard interrupt, cleaning up..."
+        return KEYBOARD_INTERRUPT_RETURN_CODE
+    finally:
+        #Always remove the testing directory
+        if args.debug:
+            print args.temp_dir_path
+        else:
+            remove_test_directory(args)
+
+    return return_code
+
+def parse_args():
+    """
+    Parses commandline arguments
+    """
+    description = textwrap.dedent(
+        """
+        Milestone exercise script for ECE297\n 
+                                 
+        Return codes:
+          {cfg_error}   Configuration error
+          {build_error}   Build error
+          {timeout_error}   Timeout error
+          {keyboard_inter}   Keyboard interupt
+          N   Number of test failed (i.e. N == 0 implies all tests passed)
+        """.format(cfg_error=CONFIG_ERROR_RETURN_CODE, build_error=BUILD_ERROR_RETURN_CODE, timeout_error=TIMEOUT_ERROR_RETURN_CODE, keyboard_inter=KEYBOARD_INTERRUPT_RETURN_CODE))
+
+    parser = argparse.ArgumentParser(description=description, formatter_class=argparse.RawDescriptionHelpFormatter)
+
+    parser.add_argument('milestone_number',
+                        type=int,
+                        help="The milestone number being exercised.")
+
+    parser.add_argument('--list_testers',
+                        default=False,
+                        action='store_true',
+                        help="List the available testers for this milestone.")
+
+    parser.add_argument('--run_tester',
+                        type=str,
+                        action='append',
+                        metavar="TESTER_NAME",
+                        help="Force the tester to run the specified test. This argument can be provided multiple times to specify multiple tests. By default if this option is not provided all tests for this milestone are run.")
+
+    #parser.add_argument('executable',
+                        #type=str,
+                        #help="The path to your executable.")
+
+    #parser.add_argument('library',
+                        #type=str,
+                        #help="The path to your library.")
+
+    parser.add_argument('--config_dir',
+                        type=str,
+                        default=None,
+                        help=argparse.SUPPRESS)
+
+    parser.add_argument('--debug',
+                        action='store_true',
+                        default=False,
+                        help=argparse.SUPPRESS)
+
+    #parser.add_argument('--test_dir',
+                        #type=str,
+                        #default=None,
+                        #help="The directory to compile and run tests.")
+
+    args = parser.parse_args()
+
+    return args
+
+def verify_setup(args, milestone_config):
+    #Check that we have a valid milestone
+    if args.milestone_number < MIN_MILESTONE_NUMBER or args.milestone_number > MAX_MILESTONE_NUMBER:
+        raise ConfigError("Milestone number {num} out side of range [{min}, {max}]".format(num=args.milestone_number, min=MIN_MILESTONE_NUMBER, max=MAX_MILESTONE_NUMBER))
+
+    #Verify that the executable and library path exist
+    if not path.isfile(milestone_config.executable_file_name()):
+        raise ConfigError("Executable '{exec_path}' does not exist in current directory!".format(exec_path=milestone_config.executable_file_name()))
+    #Verify that they are of non-zero size
+    if path.getsize(milestone_config.executable_file_name()) == 0:
+        raise ConfigError("Executable '{exec_path}' is of zero size!".format(exec_path=milestone_config.executable_file_name()))
+
+    #Same for static libraries
+    for lib_path in milestone_config.static_library_file_names():
+        if not path.isfile(lib_path):
+            raise ConfigError("Staic Library '{lib_path}' does not exist in current directory!".format(lib_path=lib_path))
+        if path.getsize(lib_path) == 0:
+            raise ConfigError("Static Library '{lib_path}' is of zero size!".format(lib_path=lib_path))
+
+def stage_temp_dir(args, milestone_config):
+    #Need to copy over the static libraries and executables
+
+    #The exec
+    shutil.copy(milestone_config.executable_file_name(), args.temp_dir_path) 
+
+    #Any static libraries
+    for lib_path in milestone_config.static_library_file_names():
+        shutil.copy(lib_path, args.temp_dir_path)
+
+def select_testers_to_run(args, milestone_config):
+    tests_to_run = None
+    if args.run_tester == None or args.run_tester == []:
+        #Nothing specified on command-line, default to run all.
+        tests_to_run = milestone_config.testers()
+    else:
+        tests_to_run = []
+
+        tester_dict = {tester.name(): tester for tester in milestone_config.testers()}
+        
+        #Add each of the tester names provided on the commandline
+        for test_name in args.run_tester:
+            if test_name not in tester_dict:
+                #Must have a valid tester name
+                raise ConfigError("Unrecognized tester: {name}".format(name=test_name))
+            else:
+                #Valid name add to run list
+                tests_to_run.append(tester_dict[test_name])
+
+    #Must have at least one tester
+    assert tests_to_run != None and len(tests_to_run) > 0
+
+    return tests_to_run
+
+def set_default_args(args):
+    """
+    Set default arguments in args
+    """
+    #Make the testing directory where we can run the tests
+    args.temp_dir_path = tempfile.mkdtemp(prefix='ece297exercise_') 
+
+    if not args.config_dir:
+        args.config_dir = CONFIG_DIR
+
+    return args
+
+def remove_test_directory(args):
+    shutil.rmtree(args.temp_dir_path)
+
+def print_summary(result_list):
+    num_failed = 0
+    num_tests = 0
+
+    for result in result_list:
+        num_failed += result.num_failed()
+        num_tests += result.num_tests()
+
+    outcome = "PASS"
+    if num_failed > 0:
+        outcome = "FAIL"
+
+    print "Test Summary: {outcome} ({failed:2} of {total:2} failed)".format(outcome=outcome,
+                                                                              failed=num_failed,
+                                                                              total=num_tests)
+    for result in result_list:
+        result.summary(indent=INDENT)
+
+    return num_failed
+
+if __name__ == '__main__':
+    retval = main()
+    sys.exit(retval)

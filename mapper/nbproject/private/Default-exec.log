@@ -1,0 +1,19 @@
+called: g++
+	/home/mohamed/Dropbox/PhD/TA/ECE297/assignments/a1/mapper
+	g++
+	-MMD
+	-MP
+	-Wall
+	-g
+	-O0
+	-Ilibstreetmap/src
+	-Ilibstreetsdatabase/src
+	-Imain/src
+	-I/usr/include/freetype2
+	-I/opt/X11/include
+	--std=c++11
+	-c
+	main/src/main.cpp
+	-o
+	build/main/src/main.o
+

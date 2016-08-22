@@ -1,0 +1,520 @@
+#include "m2.h"
+#include <sstream>
+#include <string>
+
+// variable for mouse behaviors
+t_point mouse_location_before;
+t_point mouse_location_current;
+std::vector<t_point> pinned_points;
+
+// Draws the map whose at map_path; this should be a .bin file.
+void draw_map(std::string map_path)
+{
+    std::cout << "About to start graphics.\n";
+
+    /**************** initialize display **********************/
+
+    // Set the name of the window (in UTF-8), with white background.
+    init_graphics("Map", land_color); // you could pass a t_color RGB triplet instead
+
+    // Set-up coordinates. The coordinates passed in define what coordinate
+    // limits you want to use; this coordinate system is mapped to fill 
+    // the screen.
+    set_visible_world(initial_coords);
+    
+    // Set the message at the bottom (also UTF-8)
+    update_message("Map Displaying");
+
+    // Pass control to the window handling routine.  It will watch for user input
+    // and redraw the screen / pan / zoom / etc. the graphics in response to user
+    // input or windows being moved around the screen.  We have to pass in 
+    // at least one callback -- the one to redraw the graphics.
+    // Three other callbacks can be provided to handle mouse button presses,
+    // mouse movement and keyboard button presses in the graphics area, 
+    // respectively. Those 3 callbacks are optional, so we can pass NULL if
+    // we don't need to take any action on those events, and we do that
+    // below.
+    // This function will return if and when
+    // the user presses the proceed button.
+    set_keypress_input (true);
+    set_mouse_move_input (true);
+    event_loop(act_on_button_press, act_on_mouse_move, NULL, drawscreen);   
+    // t_bound_box old_coords = get_visible_world(); // save the current view for later;
+
+    /******************* animation section *******************************/
+    // User might have panned and zoomed, which changes what world 
+    // coordinates are visible on the screen. Get back to a known view.
+    set_visible_world(initial_coords);
+    clearscreen();
+
+    close_graphics ();
+    std::cout << "Map Closed.\n";
+}
+
+// drawing out the map
+void drawscreen (void)
+{
+    clearscreen ();
+    
+    double scale = get_scale ();
+    
+    draw_all_natural_features ();
+    draw_all_intersections ();
+    draw_all_streets ();
+    
+    draw_all_pinend_points (scale);
+    
+    /*
+    t_point test_text (LON_LEFT*LON_TO_COOR_RATIO, LAT_BOTTOM*LAT_TO_COOR_RATIO);
+    setfontsize (300);
+    t_bound_box text_bound (LON_LEFT*LON_TO_COOR_RATIO - 5000, LAT_BOTTOM*LAT_TO_COOR_RATIO + 500, 5000, 500);
+    drawtext (test_text, "testing", text_bound);
+    drawtext (test_text,"Width 6 Line", 200.0, FLT_MAX);
+    */
+}
+
+void delay (long milliseconds) 
+{
+    // if you would like to use this function in your
+    // own code you will need to #include <chrono> and
+    // <thread>
+    std::chrono::milliseconds duration(milliseconds);
+    std::this_thread::sleep_for(duration);
+}
+
+
+void act_on_new_button_func (void (*drawscreen_ptr) (void)) 
+{
+    char old_button_name[200], new_button_name[200];
+    std::cout << "You pressed the new button!\n";
+    setcolor (MAGENTA);
+    setfontsize (12);
+    drawtext (500, 500, "You pressed the new button!", 10000.0, FLT_MAX);
+    sprintf (old_button_name, "%d Clicks", num_new_button_clicks);
+    num_new_button_clicks++;
+    sprintf (new_button_name, "%d Clicks", num_new_button_clicks);
+    change_button_text (old_button_name, new_button_name);
+
+    // Re-draw the screen (a few squares are changing colour with time)
+    drawscreen_ptr ();  
+}
+
+
+void act_on_button_press (float x, float y, t_event_buttonPressed event) 
+{
+
+    /* Called whenever event_loop gets a button press in the graphics *
+     * area.  Allows the user to do whatever he/she wants with button *
+     * clicks.                                                        */
+
+    // std::cout << "User clicked a mouse button at coordinates (" 
+    //          << x << "," << y << ")";
+    /*
+    if (event.shift_pressed || event.ctrl_pressed) 
+    {
+        std::cout << " with ";
+        if (event.shift_pressed) 
+        {
+            std::cout << "shift ";
+            if (event.ctrl_pressed)
+            {
+                std::cout << "and ";
+            }
+        }
+        if (event.ctrl_pressed)
+        {
+            std::cout << "control ";
+        }
+        std::cout << "pressed.";
+    }
+    std::cout << std::endl;
+
+    if (line_entering_demo) {
+        line_pts.push_back(t_point(x,y));
+        have_rubber_line = false;
+
+        // Redraw screen to show the new line.  Could do incrementally, but this is easier.
+        drawscreen ();  
+    }
+    */
+    
+    mouse_location_before = mouse_location_current;
+    mouse_location_current = t_point(x, y);
+    pinned_points.push_back (mouse_location_current);
+    drawscreen ();
+    
+    // fillarc (mouse_location_current, 100, 300, 360);
+}
+// update the variables for mouse behaviors
+// update the current latitude and longitude cursor is pointing at
+void act_on_mouse_move (float x, float y) {
+    // function to handle mouse move event, the current mouse position in the current world coordinate
+    // system (as defined in your call to init_world) is returned
+    
+    mouse_location_before = mouse_location_current;
+    mouse_location_current = t_point(x, y);
+    
+    std::cout << x << ", " << y << std::endl;
+    
+    double lat = y / LAT_TO_COOR_RATIO;
+    double lon = x / LON_TO_COOR_RATIO;
+    
+    std::string message = "";
+    std::ostringstream strs;
+    strs << "Lat: " << lat << ", " << "Lon: " << lon;
+    message = strs.str();
+    
+    update_message(message);
+}
+
+
+void act_on_key_press (char c) {
+    // function to handle keyboard press event, the ASCII character is returned
+    std::cout << "Key press: " << c << std::endl;
+}
+
+
+// calculate where a set of latitude and longitude correspond to on the map
+// this function consider the relative difference of the top-left corner and the input 
+// and located it in the coordinate system
+t_point get_coordinate_from_LatLon (LatLon geo_location)
+{
+    
+    // calculate the coordinate using ratio
+    /*
+    double x_coor = MAP_ORIGIN_X + ((geo_location.lon - LON_LEFT) * LON_TO_COOR_RATIO);
+    double y_coor = MAP_ORIGIN_Y + ((geo_location.lat - LAT_BOTTOM) * LAT_TO_COOR_RATIO);
+    
+    t_point point (x_coor, y_coor);
+    */
+    
+    
+    double x_coor = geo_location.lon * LON_TO_COOR_RATIO;
+    double y_coor = geo_location.lat * LAT_TO_COOR_RATIO;
+    
+    t_point point (x_coor, y_coor);
+    
+    return point;
+}
+
+// draw natural feature by name
+void draw_all_natural_features ()
+{
+    draw_all_water ();
+    draw_all_natural ();
+    draw_all_waterways ();
+    draw_all_lands ();
+}
+
+void draw_all_water ()
+{
+    setcolor (lake_color);
+    
+    int num_of_natural_features = getFeatureCount ();
+    // loop through all natural features and draw polygon according to their points
+    for (int i=0; i<num_of_natural_features; i++)
+    {
+        int num_of_points = getFeaturePointCount (i);
+        
+        t_point * point_ptr = NULL;
+        point_ptr = new t_point [num_of_points];
+        
+        for (int j=0; j<num_of_points; j++)
+        {
+            LatLon point = getFeaturePoint (i, j);
+            point_ptr[j] = get_coordinate_from_LatLon (point);
+        }
+        
+        if (point_ptr == NULL)
+        {
+            continue;
+        }
+        
+        std::string water_type = getFeatureAttribute (i, "water");
+        if (water_type == "lake" || water_type == "lagoon" || water_type == "pond")
+        {
+            fillpoly (point_ptr, num_of_points);
+        }
+        delete [] point_ptr;
+    }
+}
+
+void draw_all_natural ()
+{
+    int num_of_natural_features = getFeatureCount ();
+    // loop through all natural features and draw polygon according to their points
+    for (int i=0; i<num_of_natural_features; i++)
+    {
+        int num_of_points = getFeaturePointCount (i);
+        
+        t_point * point_ptr =  new t_point [num_of_points];
+        
+        for (int j=0; j<num_of_points; j++)
+        {
+            LatLon point = getFeaturePoint (i, j);
+            point_ptr[j] = get_coordinate_from_LatLon (point);
+        }
+        
+        if (point_ptr == NULL)
+        {
+            continue;
+        }
+        
+        std::string water_type = getFeatureAttribute (i, "natural");
+        if (water_type == "sand")
+        {
+            setcolor (natural_sand_color);
+            fillpoly (point_ptr, num_of_points);
+        }
+        else if (water_type == "water")
+        {
+            setcolor (natural_water_color);
+            fillpoly (point_ptr, num_of_points);
+        }
+        else if (water_type == "wood")
+        {
+            setcolor (natural_wood_color);
+            fillpoly (point_ptr, num_of_points);
+        }
+        else if (water_type == "tree_row")
+        {
+            setcolor (natural_tree_row_color);
+            // fillpoly (point_ptr, num_of_points);
+            // draw dash line
+            setlinestyle (DASHED);
+            drawline (point_ptr[0], point_ptr[1]);
+        }
+        else if (water_type == "grassland")
+        {
+            setcolor (natural_grassland_color);
+            fillpoly (point_ptr, num_of_points);
+        }
+        else if (water_type == "beach")
+        {
+            setcolor (natural_beach_color);
+            fillpoly (point_ptr, num_of_points);
+        }
+        
+        setlinestyle (SOLID);
+        delete [] point_ptr;
+    }
+}
+
+void draw_all_waterways ()
+{
+    setlinestyle (SOLID);
+    double scale = get_scale ();
+    
+    int num_of_natural_features = getFeatureCount ();
+    // loop through all natural features and draw polygon according to their points
+    for (int i=0; i<num_of_natural_features; i++)
+    {
+        int num_of_points = getFeaturePointCount (i);
+        
+        std::string water_type = getFeatureAttribute (i, "waterway");
+        if (water_type == "river")
+        {
+            setcolor (waterway_river_color);
+            setlinewidth (default_water_way_width / scale);
+        }
+        else if (water_type == "stream")
+        {
+            setcolor (waterway_stream_color);
+            setlinewidth ((default_water_way_width / scale) * 2 /3);
+        }
+        else if (water_type == "boatyard")
+        {
+            setcolor (waterway_boatyard_color);
+            setlinewidth ((default_water_way_width / scale) / 3);
+        }
+        
+        for (int j=0; j<num_of_points-1; j++)
+        {
+            LatLon way_point_1 = getFeaturePoint (i, j);
+            LatLon way_point_2 = getFeaturePoint (i, j+1);
+            t_point point1 = get_coordinate_from_LatLon (way_point_1);
+            t_point point2 = get_coordinate_from_LatLon (way_point_2);
+            
+            drawline (point1, point2);
+        }
+    }
+}
+
+void draw_all_lands ()
+{
+    int num_of_natural_features = getFeatureCount ();
+    // loop through all natural features and draw polygon according to their points
+    for (int i=0; i<num_of_natural_features; i++)
+    {
+        int num_of_points = getFeaturePointCount (i);
+        
+        t_point * point_ptr = NULL;
+        point_ptr = new t_point [num_of_points];
+        
+        for (int j=0; j<num_of_points; j++)
+        {
+            LatLon point = getFeaturePoint (i, j);
+            point_ptr[j] = get_coordinate_from_LatLon (point);
+        }
+        
+        if (point_ptr == NULL)
+        {
+            continue;
+        }
+        
+        std::string water_type = getFeatureAttribute (i, "land");
+        if (water_type == "island")
+        {
+            setcolor (land_color);
+            fillpoly (point_ptr, num_of_points);
+        }
+                
+        setlinestyle (SOLID);
+        delete [] point_ptr;
+    }
+}
+
+
+void find_bound ()
+{
+    int num_of_intersections = getNumberOfIntersections ();
+    double lat_north, lat_south, lon_east, lon_west;
+    LatLon intersection0 = getIntersectionPosition (0);
+    
+    lat_north = intersection0.lat;
+    lat_south = intersection0.lat;
+    lon_east = intersection0.lon;
+    lon_west = intersection0.lon;
+    
+    for (int i=1; i<num_of_intersections; i++)
+    {
+        LatLon intersection_i = getIntersectionPosition (i);
+        if (intersection_i.lat > lat_north)
+        {
+            lat_north = intersection_i.lat;
+        }
+        
+        if (intersection_i.lat < lat_south)
+        {
+            lat_south = intersection_i.lat;
+        }
+        
+        if (intersection_i.lon > lon_east)
+        {
+            lon_east = intersection_i.lon;
+        }
+        
+        if (intersection_i.lon < lon_west)
+        {
+            lon_west = intersection_i.lon;
+        }
+    }
+    std::cout << std::setprecision(15) << lon_west << " , " << lat_south << " , " << lon_east << " , " << lat_north << std::endl;
+}
+
+// return the ratio of how much the map has been zoomed in
+double get_scale ()
+{
+    t_bound_box current_world = get_visible_world ();
+    double current_width = current_world.get_width ();
+    double scale_factor = current_width / MAP_WIDTH;
+    return scale_factor;
+}
+
+void draw_all_intersections ()
+{
+    /*
+    int num_of_intersections = getNumberOfIntersections ();
+    
+    if (num_of_intersections == 0)
+    {
+        return;
+    }
+    
+    for (int i=0; i<num_of_intersections; i++)
+    {
+        LatLon intersection_i = getIntersectionPosition (i);
+        t_point intersection_on_map = get_coordinate_from_LatLon (intersection_i);
+        setcolor (RED);
+        fillarc (intersection_on_map.x, intersection_on_map.y, 100, 0, 360);
+    }
+    */
+    
+    
+    
+}
+
+void draw_all_streets ()
+{
+    // drawing streets
+    setcolor (STREET_COLOR);
+    int num_of_street_segments = getNumberOfStreetSegments ();
+    
+    double scale = get_scale ();
+    
+    for (int i=0; i<num_of_street_segments; i++)
+    {
+        int num_of_curve_points = getStreetSegmentCurvePointCount (i);
+        // adjust the line width for streets
+        if (getStreetSegmentOneWay (i) == true)
+        {
+            setlinewidth (default_one_way / scale);
+        }
+        else
+        {
+            setlinewidth (default_street_width / scale);
+        }
+        
+        // connect with the intersection
+        StreetSegmentEnds ends = getStreetSegmentEnds (i);
+        LatLon intersection_start = getIntersectionPosition (ends.from);
+        LatLon intersection_end = getIntersectionPosition (ends.to);
+        
+        LatLon curve_point1 = getStreetSegmentCurvePoint (i, 0);
+        LatLon curve_point2 = getStreetSegmentCurvePoint (i, num_of_curve_points-1);
+        
+        t_point point1 = get_coordinate_from_LatLon (intersection_start);
+        t_point point2 = get_coordinate_from_LatLon (intersection_start);
+        
+        t_point start = get_coordinate_from_LatLon (intersection_start);
+        t_point end = get_coordinate_from_LatLon (intersection_end);
+        
+        drawline (start, point1);
+        drawline (point2, end);
+        
+        // loop through street segment's curve points and draw segments
+        for (int j=0; j<num_of_curve_points-1; j++)
+        {
+            curve_point1 = getStreetSegmentCurvePoint (i, j);
+            curve_point2 = getStreetSegmedouble scalentCurvePoint (i, j+1);
+            
+            point1 = get_coordinate_from_LatLon (curve_point1);
+            point2 = get_coordinate_from_LatLon (curve_point2);
+            
+            drawline (point1, point2);
+        }
+    }    
+}
+
+void draw_all_pinend_points (double scale)
+{
+    int num = pinned_points.size();
+    
+    setcolor (pin_color);
+    
+    for (int i=0; i<num; i++)
+    {
+        fillarc (pinned_points[i], pin_size * scale, 60, 60);
+    }
+}
+
+
+void draw_street_names (){
+	//void settextattrs(int pointsize, float degrees);
+	//default_street_width/get_scale();
+	unsigned long long number_of_streets = getNumberOfStreets();
+	for(unsigned i = 0; i < number_of_streets; ++i)
+	{
+		;
+	}
+}
